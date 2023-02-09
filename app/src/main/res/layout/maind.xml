@@ -8,7 +8,6 @@
 
     <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
-        app:statusBarForeground="@android:color/holo_red_light"
         android:layout_height="40dp">
 
         <RadioGroup
@@ -44,18 +43,20 @@
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:background="#F8F8F8"
+            android:fontFamily="sans-serif"
             android:gravity="start"
             android:hint="UserCustom.ini"
             android:minLines="1"
-            android:padding="5dip"
-            android:textSize="12dp"
-            android:fontFamily="sans-serif"
-            android:scrollbars="vertical|horizontal"/>
+            android:paddingLeft="10dip"
+            android:paddingRight="10dip"
+            android:scrollbars="vertical|horizontal"
+            android:inputType="textMultiLine"
+            android:textSize="12dp" />
     </LinearLayout>
 
     <RelativeLayout
-        android:layout_width="172dp"
-        android:layout_height="245dp"
+        android:layout_width="113dp"
+        android:layout_height="310dp"
         android:layout_alignParentEnd="true"
         android:layout_alignParentRight="true"
         android:layout_alignParentBottom="true"
@@ -84,7 +85,7 @@
             android:id="@+id/fabSave"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_above="@id/fabLoad"
+            android:layout_above="@id/fabSav"
             android:layout_alignParentEnd="true"
             android:layout_gravity="bottom|end"
             android:layout_marginBottom="8dp"
@@ -92,6 +93,20 @@
             android:visibility="visible"
             app:fabSize="mini"
             app:srcCompat="@drawable/diskette" />
+
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/fabSav"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_above="@id/fabLoad"
+            android:layout_alignParentEnd="true"
+            android:layout_gravity="bottom|end"
+            android:layout_marginBottom="8dp"
+            android:text="Save"
+            android:visibility="visible"
+            app:fabSize="mini"
+            app:srcCompat="@drawable/sav" />
+
         <com.google.android.material.floatingactionbutton.FloatingActionButton
             android:id="@+id/fabLoad"
             android:layout_width="wrap_content"

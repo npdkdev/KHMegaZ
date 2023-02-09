@@ -262,15 +262,15 @@ object Utils {
         return null
     }
 
-    private fun isExternalStorageDocument(uri: Uri): Boolean {
+    fun isExternalStorageDocument(uri: Uri): Boolean {
         return "com.android.externalstorage.documents" == uri.authority
     }
 
-    private fun isDownloadsDocument(uri: Uri): Boolean {
+    fun isDownloadsDocument(uri: Uri): Boolean {
         return "com.android.providers.downloads.documents" == uri.authority
     }
 
-    private fun isMediaDocument(uri: Uri): Boolean {
+    fun isMediaDocument(uri: Uri): Boolean {
         return "com.android.providers.media.documents" == uri.authority
     }
 

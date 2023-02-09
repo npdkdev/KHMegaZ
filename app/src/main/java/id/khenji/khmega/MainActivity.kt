@@ -9,7 +9,6 @@ import android.content.pm.PackageManager.NameNotFoundException
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Environment
 import android.os.storage.StorageManager
 import android.provider.DocumentsContract
 import android.provider.Settings
@@ -21,9 +20,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.edit
+import androidx.core.widget.addTextChangedListener
 import androidx.documentfile.provider.DocumentFile
 import id.khenji.khmega.databinding.MaindBinding
-import java.io.BufferedReader
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -31,36 +30,34 @@ import java.io.IOException
 
 class MainActivity : AppCompatActivity() {
 
-    //private lateinit var appBarConfiguration: AppBarConfiguration
     private lateinit var binding: MaindBinding
     private lateinit var sharedpref: SharedPreferences
-    private lateinit var userCustomUri: Uri
 
     private var helper: Helper = Helper()
     private val asuw: Int.(Int) -> Int = fun Int.(thai: Int) = this + thai
-//    private val asuws: Int.(Int) -> Int = (2,9)
 
     companion object {
-        val REQUEST_CODE = 899
         lateinit var pkgApp: String
+        val isSAF = Build.VERSION.SDK_INT > Build.VERSION_CODES.Q
         var fabVisible = false
         var versionStr: String? = null
         var versionApp: String? = null
         var isFirstRun: Boolean = true
-        val pkgGlobal = "com.tencent.ig"
-        val pkgKorea = "com.pubg.krmobile"
+        const val pkgGlobal = "com.tencent.ig"
+        const val pkgKorea = "com.pubg.krmobile"
         var stringPath: String = "/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/"
         var configPath: String = "/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android"
         var savPath: String = "/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/SaveGames"
         var dataPath: String = "/Android/data/"
         var obbPath: String = "/Android/obb/"
-        val reqObb: Int = 9900
-        val reqData: Int = 9901
-        val reqActive: Int = 9902
-        val reqUserCustom: Int = 9903
-        val reqDetailsApp = 9904
-        var askPerm = 1
+        const val reqObb: Int = 9900
+        const val reqData: Int = 9901
+        const val reqActive: Int = 9902
+        const val reqUserCustom: Int = 9903
+        const val reqDetailsApp = 9904
+        const val reqPicker = 9905
         var reqNow = 0
+        var isReady = false
         fun debug(msg: String, tag: String = "KHMEGA"){
             Log.d(tag, msg)
         }
@@ -76,15 +73,13 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         sharedpref =getSharedPreferences("khenji", MODE_PRIVATE)
         isFirstRun = sharedpref.getBoolean("firstrun", true)
-        debug(asuw(3,2).toString())
         binding.pubgVersion.setOnCheckedChangeListener { radioGroup, i ->
-            var pathConfig = "${stringPath}Config/Android"
             when (i){
                 R.id.korea_version -> {
                     versionStr = "Korea"
                     if(!appInstalledOrNot(pkgKorea)) {
-                        radioGroup.clearCheck()
-                        toast(this, "$versionStr tidak terinstall")
+                        clearVersion(sav = false, config = false)
+                        toast(this, "Korea tidak terinstall")
                     } else {
                         setupVersion("korea")
                     }
@@ -92,79 +87,248 @@ class MainActivity : AppCompatActivity() {
                 R.id.global_version -> {
                     versionStr = "Global"
                     if(!appInstalledOrNot(pkgGlobal)) {
-                        radioGroup.clearCheck()
-                        toast(this, "$versionStr tidak terinstall")
+                        clearVersion(sav = false, config = false)
+                        toast(this, "Global tidak terinstall")
                     } else {
-                        //openSettings(pkgGlobal)
                         setupVersion("global")
                     }
                 }
             }
         }
-        binding.fabShow.setOnClickListener { view ->
-            versionStr?.let { readConfig(it) }
+        binding.fabShow.setOnClickListener { _ ->
             if (!fabVisible) {
                 fabVisible = true
                 binding.fabSave.show()
+                binding.fabSav.show()
                 binding.fabRun.show()
                 binding.fabLoad.show()
                 binding.fabRun.visibility = View.VISIBLE
                 binding.fabLoad.visibility = View.VISIBLE
                 binding.fabSave.visibility = View.VISIBLE
+                binding.fabSav.visibility = View.VISIBLE
                 binding.fabShow.setImageDrawable(resources.getDrawable(android.R.drawable.ic_menu_close_clear_cancel))
             } else {
                 fabVisible =  false
                 binding.fabSave.hide()
+                binding.fabSav.hide()
                 binding.fabRun.hide()
                 binding.fabLoad.hide()
                 binding.fabRun.visibility = View.GONE
                 binding.fabLoad.visibility = View.GONE
                 binding.fabSave.visibility = View.GONE
+                binding.fabSav.visibility = View.GONE
                 binding.fabShow.setImageDrawable(resources.getDrawable(android.R.drawable.ic_input_add))
             }
-            //Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-            //    .setAction("Action", null).show()
-            //val uri3 = Uri.parse(sharedpref.getString("obbUri", null))
-            //uri3?.renameTo(pkgApp)
         }
-        binding.fabLoad.setOnClickListener {
-            try {
-                val backup = File("${filesDir}/$versionStr.ini")
-                val backupFile = File("${filesDir}/backup$versionStr.ini")
-                val writeBackup = FileOutputStream(backupFile)
-                    debug(fileList().toString())
-                //backupFile.createNewFile()
-                if (backup.exists() and backup.isFile and backup.canRead()) {
-                    val reader = backup.bufferedReader()
-                    val stringBuilder = StringBuilder()
-                    var line: String?
-                    var matches = false
-                    while (reader.readLine().also {
-                            line = it
-                        } != null) {
-                        stringBuilder.append(line)
-                        stringBuilder.append("\n")
-                        if(!matches) {
-                            if(line!!.contains("BackUp DeviceProfile")){
-                                matches = true
-                            }
-                        } else {
-                            if(line!!.contains("UserCustom DeviceProfile")) break
-                            writeBackup.write(line?.toByteArray())
-                            writeBackup.write("\n".toByteArray())
-                        }
-                    }
-                    binding.editconfig.setText(backup.readText())
-                } else {
-                    debug("File not exist")
+        binding.fabSav.setOnLongClickListener { view ->
+            toast(this, "Sav deleted")
+            File("${filesDir}/Active.sav").delete()
+        }
+        binding.fabSav.setOnClickListener {
+            if(versionIsSelected()) {
+                val inte = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "*/*"
+                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                    putExtra(Intent.EXTRA_LOCAL_ONLY, true)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
                 }
-            } catch (e: IOException) {
-                e.printStackTrace()
+                startActivityForResult(inte, reqPicker)
             }
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        binding.fabLoad.setOnClickListener {
+            if(versionIsSelected()) {
+                versionStr?.let { it1 -> loadConfig(isSelf = true) }
+            }
+        }
+        binding.fabLoad.setOnLongClickListener {
+            if(versionIsSelected()) {
+                versionStr?.let { it1 -> loadConfig(isSelf = false) }
+            }
+            true
+        }
+
+        binding.editconfig.addTextChangedListener {
+            //debug(it.toString())
+        }
+        
+        binding.fabRun.setOnClickListener {
+            if(versionIsSelected()) {
+                if(isSAF) {
+                    val obbUri = Uri.parse(sharedpref.getString("obbUri", null))
+                    val dataUri = Uri.parse(sharedpref.getString("dataUri", null))
+                    obbUri?.renameTo(pkgApp)
+                    dataUri?.renameTo(pkgApp)
+                    openSettings(pkgApp)
+                } else {
+                    pkgApp.renameTo()
+                    openSettings(pkgApp)
+                }
+            }
+        }
+        binding.fabSave.setOnClickListener {
+            if(versionIsSelected()) {
+                try {
+                    val saveFile = File("${filesDir}/UserCustom.ini")
+                    val backupFile = File("${filesDir}/backup$versionStr.ini")
+                    val content = binding.editconfig.text.split("\n").filter { it.isNotBlank() }.joinToString("\n")
+                    if(content.isEmpty() || content.lines().size < 10){
+                        toast(this, "Format Config Salah -2")
+                    } else if (content.contains("BackUp DeviceProfile") or content.contains("UserCustom DeviceProfile")) {
+                        toast(this, "Format Config Salah")
+                    } else {
+                        var stringBuilder = StringBuilder()
+                        stringBuilder.append("[UserCustom DeviceProfile]")
+                        stringBuilder.append("\n")
+                        stringBuilder.append(content)
+                        stringBuilder.append("\n\n\n")
+                        stringBuilder.append("[BackUp DeviceProfile]")
+                        stringBuilder.append("\n")
+                        stringBuilder.append(backupFile.readText())
+                        FileOutputStream(saveFile).use { output ->
+                            output.write(stringBuilder.toString().toByteArray())
+                        }
+                        configIsReady().also {
+                            if(it) toast(this,"Config saved..") else toast(this, "Failed to save")
+                        }
+                    }
+                } catch (ee: NullPointerException) {
+                    clearVersion()
+                    ee.printStackTrace()
+                    debug("UserCustom not found")
+                } catch (e: IOException) {
+                    debug(e.toString())
+                    e.printStackTrace()
+                }
+            }
+        }
+
+        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) {
             checkPerm(reqObb)
         }
+        // clear sav first
+        clearVersion(config = false)
+    }
+    private fun clearVersion(sav: Boolean = true, config: Boolean = true): Boolean {
+        return try {
+            binding.pubgVersion.clearCheck()
+            sav && File("${filesDir}/Active.sav").delete()
+            config && File("${filesDir}/UserCustom.ini").delete()
+            versionApp = null
+            versionStr = null
+            sharedpref.edit {
+                putString("version", null)
+                putString("pkg_version", null)
+            }
+            true
+        } catch (e: Exception) {
+            debug("${e.message}")
+            toast(this, "Error 0x274")
+            false
+        }
+    }
+    private fun configIsReady(): Boolean {
+        val uCustom = "UserCustom.ini"
+        val activeSav = "Active.sav"
+        val pathConfig = File("$filesDir/UserCustom.ini")
+        val pathSav = File("$filesDir/Active.sav")
+        val isSav = pathSav.exists() && pathSav.canRead()
+        val isConfig = pathConfig.exists() && pathConfig.canRead()
+        try {
+            if (isSAF) {
+                val treeUserCustom = DocumentFile.fromTreeUri(
+                    this,
+                    Uri.parse(sharedpref.getString("userCustom${versionStr}Uri", null))
+                )
+                val treeSav = DocumentFile.fromTreeUri(
+                    this,
+                    Uri.parse(sharedpref.getString("active${versionStr}Uri", null))
+                )
+                isConfig && treeUserCustom?.findFile("UserCustom.ini").also {
+                    if (it == null) {
+                        debug("UserCustom not found")
+                        debug("create file")
+                        val createFile = treeUserCustom?.createFile("text/", "UserCustom.ini")
+                        createFile?.uri?.let { uriFile ->
+                            helper.writeContent(
+                                this,
+                                uriFile,
+                                pathConfig.readBytes()
+                            )
+                        }
+                    } else {
+                        if (it.exists() == true and (it.isFile) and (it.canRead())) {
+                            it.uri.let { ur ->
+                                debug(helper.delete(this, "UserCustom.ini", ur).toString())
+                                val createFile = treeUserCustom?.createFile("text/", "UserCustom.ini")
+                                createFile?.uri?.let { uriFile ->
+                                    helper.writeContent(
+                                        this,
+                                        uriFile,
+                                        pathConfig.readBytes()
+                                    )
+                                }
+                            }
+                        } else {
+                            debug("Failed to modified UserCustom")
+                        }
+                    }
+                } != null
+                isSav && treeSav?.findFile("Active.sav").also {
+                    if (it == null) {
+                        debug("Active not found")
+                        debug("create file")
+                        val createFile = treeSav?.createFile("text/", "Active.sav")
+                        createFile?.uri?.let { uriFile ->
+                            helper.writeContent(
+                                this,
+                                uriFile,
+                                pathSav.readBytes()
+                            )
+                        }
+                    } else {
+                        if (it.exists() == true and (it.isFile) and (it.canRead())) {
+                            it.uri.let { ur ->
+                                helper.delete(this, "Active.sav", ur)
+                                val createFile = treeSav?.createFile("text/", "Active.sav")
+                                createFile?.uri?.let { uriFile ->
+                                    helper.writeContent(
+                                        this,
+                                        uriFile,
+                                        pathSav.readBytes()
+                                    )
+                                }
+                            }
+                        } else {
+                            debug("Failed to modified Active")
+                        }
+                    }
+                } != null
+                isReady = true
+                return true
+            } else {
+                val userCustom = File("${Utils.externalStorageDir}/${configPath}/$uCustom")
+                val active = File("${Utils.externalStorageDir}/${savPath}/$activeSav")
+                debug("copy to android")
+                val writeU = File("${filesDir}/${uCustom}")
+                val writeA = File("${filesDir}/${activeSav}")
+                writeU.copyTo(userCustom, overwrite = true)
+                if (writeA.isFile) writeA.copyTo(active, overwrite = true)
+                isReady = true
+                return true
+            }
+        } catch (e: Exception) {
+            debug("Error: ${e.message}")
+            toast(this,"Error 0x18234")
+            isReady = false
+            return false
+        }
+    }
+    private fun versionIsSelected(): Boolean {
+        return if(binding.pubgVersion.checkedRadioButtonId == -1 && versionApp == null) {
+            toast(this, "Select version first")
+            false
+        } else true
     }
     private fun setupVersion(pkg: String){
         pkgApp = when(pkg){
@@ -175,17 +339,18 @@ class MainActivity : AppCompatActivity() {
         versionApp = pkg
         configPath = "Android/data/$pkgApp${stringPath}Config/Android"
         savPath = "Android/data/$pkgApp${stringPath}SaveGames"
-        dataPath = "$dataPath"
-        obbPath = "$obbPath"
         sharedpref.edit {
             putString("version", versionApp)
             putString("pkg_version", pkgApp)
             apply()
         }
         if(sharedpref.getString(pkgApp,null) == null){
-//            requestPerms(config.path)
-            debug(configPath)
-            requestPerms(savPath)
+            if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) {
+                requestPerms(savPath)
+            } else {
+                !isExist("${versionStr}.ini") && clearVersion()
+                !isExist("${versionStr}.sav") && clearVersion()
+            }
         }
     }
     private fun Uri.renameTo(pkg: String) {
@@ -198,20 +363,37 @@ class MainActivity : AppCompatActivity() {
                     if(it.renameTo("${it.name}_khenji"))status=true
                 }
             }
-            if (status == false){
+            if (!status){
                 tree?.findFile("${pkg}_khenji")?.let {
                     if (it.isDirectory){
                         if(it.renameTo("${pkg}"))status=true
                     }
                 }
             }
-            debug(status.toString())
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
+    // rename for android 10 or below
+    private fun String.renameTo() {
+        try {
+            val pkg = this
+            val obbPath = File("${Utils.externalStorageDir}/Android/obb/$pkg")
+            val dataPath =
+                File("${Utils.externalStorageDir}/Android/data/$pkg")
+            val dataDestPath =
+                File("${Utils.externalStorageDir}/Android/data/${pkg}_khenji")
+            val obbDestPath =
+                File("${Utils.externalStorageDir}/Android/obb/${pkg}_khenji")
 
-
+            if (dataPath.exists())dataPath.renameTo(dataDestPath)
+            else if (dataDestPath.exists())dataDestPath.renameTo(dataPath)
+            if (obbPath.exists()) obbPath.renameTo(obbDestPath)
+            else if (obbDestPath.exists())obbDestPath.renameTo(obbPath)
+        } catch (e: IOException) {
+            debug(e.toString())
+        }
+    }
 
     override fun onRequestPermissionsResult(
         requestCode: Int,
@@ -229,22 +411,24 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-    private fun requestPerms(path: String){
-        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            if(isFirstRun)requestAllFilesPermission()
-            //requestDocumentPermission("obb/$pkgApp")
-            //requestDocumentPermission(path)
-            checkPerm(reqActive)
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun requestPerms(path: String): Boolean {
+        return if(isSAF) {
+            if(isFirstRun && Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) requestAllFilesPermission()
+            checkPerm(reqActive) && checkPerm(reqUserCustom)
+        } else {
+            true
         }
     }
     @RequiresApi(Build.VERSION_CODES.Q)
-    private fun checkPerm(reqCode: Int) {
+    private fun checkPerm(reqCode: Int): Boolean {
         when (reqCode) {
             reqActive -> {
                 sharedpref.getString("active${versionStr}Uri", null).let {
-                    if (it == null) requestDocumentPermission("$savPath", reqCode)
+                    if (it == null)requestDocumentPermission(savPath, reqCode)
                     if (it != null) {
-                        if(!permissionGranted(it))requestDocumentPermission("$savPath", reqCode)
+                        if(!permissionGranted(it))requestDocumentPermission(savPath, reqCode)
+                        else !isExist("${versionStr}.sav") && clearVersion(); return true
                     }
                 }
             }
@@ -253,6 +437,7 @@ class MainActivity : AppCompatActivity() {
                     if (it == null) requestDocumentPermission("$configPath", reqCode)
                     if (it != null) {
                         if(!permissionGranted(it))requestDocumentPermission("$configPath", reqCode)
+                        else !isExist("${versionStr}.ini") && clearVersion(); return true
                     }
                 }
             }
@@ -260,7 +445,7 @@ class MainActivity : AppCompatActivity() {
                 sharedpref.getString("dataUri", null).let {
                     if (it == null) requestDocumentPermission("$dataPath", reqCode)
                     if (it != null) {
-                        if(!permissionGranted(it))requestDocumentPermission("$dataPath", reqCode)
+                        if(!permissionGranted(it))requestDocumentPermission("$dataPath", reqCode) else return true
                     }
                 }
             }
@@ -268,11 +453,12 @@ class MainActivity : AppCompatActivity() {
                 sharedpref.getString("obbUri", null).let {
                     if (it == null) requestDocumentPermission("$obbPath", reqCode)
                     if (it != null) {
-                        if(!permissionGranted(it))requestDocumentPermission("$obbPath", reqCode)
+                        if(!permissionGranted(it))requestDocumentPermission("$obbPath", reqCode) else return true
                     }
                 }
             }
         }
+        return false
     }
     private fun askPermission(pck: String?) {
         if (pck != null) {
@@ -324,6 +510,21 @@ class MainActivity : AppCompatActivity() {
         }
         return false
     }
+    val isExist: (String) -> Boolean = fun(f: String): Boolean {
+        return if (File("$filesDir/$f").exists()) {
+            debug("file $f ada")
+            true
+        } else {
+            debug("file $f tidak ada")
+            loadConfigs()
+        }
+        //return if !File("$filesDir/$f").exists() else helper.copyToData(this, "UserCustom.ini", "${versionStr}.ini", Uri.parse(sharedpref.getString("${versionStr}", null)))
+    }
+    fun html(initz: String.() -> Unit): String {
+        val hehe = String()
+        hehe.initz()
+        return hehe
+    }
     @RequiresApi(Build.VERSION_CODES.Q)
     val startForResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         result ->
@@ -353,34 +554,54 @@ class MainActivity : AppCompatActivity() {
                             sharedpref.edit(commit = true, action = {
                                 this.putString("userCustom${versionStr}Uri", treeUri.toString())
                             })
-                            helper.copyToData(this, "UserCustom.ini", "${versionStr}.ini", treeUri)
+                            //!helper.copyToData(this, "UserCustom.ini", "${versionStr}.ini", treeUri) && clearVersion()
+                            !loadConfig("config") && clearVersion()
                             checkPerm(reqActive)
                         }
                         reqActive -> {
                             sharedpref.edit(commit = true, action = {
                                 this.putString("active${versionStr}Uri", treeUri.toString())
                             })
-                            helper.copyToData(this, "Active.sav", "${versionStr}.sav", treeUri)
+                            //!helper.copyToData(this, "Active.sav", "${versionStr}.sav", treeUri) && clearVersion()
+                            !loadConfig("sav") && clearVersion()
                             checkPerm(reqUserCustom)
                         }
+                        else -> {}
                     }
-
-                    debug(treeUri.toString())
-                    //readSDK30(treeUri)
                 }
             }
         } else if (result.resultCode == RESULT_CANCELED) {
-            debug("cancel $reqNow")
             if (reqNow == reqDetailsApp || sharedpref.getInt("reqNow", 0) == reqDetailsApp) {
-                toast(this, "its from settings android 10 or higher")
+                val obbUri = Uri.parse(sharedpref.getString("obbUri", null))
+                val dataUri = Uri.parse(sharedpref.getString("dataUri", null))
+                obbUri?.renameTo(pkgApp)
+                dataUri?.renameTo(pkgApp)
             }
+        }
+    }
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (resultCode == RESULT_OK && requestCode == reqPicker) {
+            data?.data.also { uri ->
+                if (uri != null) {
+                    if (Utils.isDownloadsDocument(uri)) {
+                        grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    helper.copyToData(ctx = this, filename = "Active.sav", uri = uri).also {
+                        if(it) toast(this,"Sav loaded")
+                    }
+                }
+            }
+        } else if (resultCode == RESULT_CANCELED && requestCode == reqDetailsApp) {
+            pkgApp.renameTo()
         }
     }
     private fun appInstalledOrNot(uri: String): Boolean {
         val pm = packageManager
         val flags = 0
         try {
-            val checkPkg = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 pm.getPackageInfo(uri, PackageManager.PackageInfoFlags.of(flags.toLong()))
             } else {
                 pm.getPackageInfo(uri, 0)
@@ -392,31 +613,173 @@ class MainActivity : AppCompatActivity() {
         return false
     }
     private fun openSettings(packageName: String) {
-        val pm = this.packageManager
         val intt = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + packageName))
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             reqNow = reqDetailsApp
             startForResult.launch(intt)
-            debug("load 10 higer")
             sharedpref.edit { putInt("reqNow", reqDetailsApp) }
         } else {
             sharedpref.edit { putInt("reqNow", reqDetailsApp) }
-            debug("load under 10")
             startActivityForResult(intt, reqDetailsApp)
         }
     }
-
-    @Suppress("DEPRECATION")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (resultCode == RESULT_OK && requestCode == reqDetailsApp) {
-            if (data != null) {
-                debug("its from settings")
+    // for Storage Access Framework
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun loadConfig(filename: String): Boolean {
+        try {
+            var content: String? = null
+            var status = true
+            val backupFile = File("${filesDir}/backup${versionStr}.ini")
+            var matches = false
+            if(filename == "config") {
+                val treeUri =
+                    sharedpref.getString("userCustom${versionStr}Uri", null).let {
+                        if (it == null) toast(this, "Failed permission 0")
+                        DocumentFile.fromTreeUri(this, Uri.parse(it))
+                    }
+                treeUri?.findFile("UserCustom.ini").also {
+                    if (it == null) toast(this, "File UserCustom not found -6")
+                    else content = helper.readContent(this, it.uri, "$versionStr.ini")
+                }
+            } else if(filename == "sav") {
+                val treeUriSav =
+                    sharedpref.getString("active${versionStr}Uri", null).let {
+                        if (it == null) toast(this, "Failed permission -1")
+                        DocumentFile.fromTreeUri(this, Uri.parse(it))
+                    }
+                treeUriSav?.findFile("Active.sav").also {
+                    if (it == null) toast(this, "File Sav not found -4")
+                    else helper.readContent(this, it.uri, "$versionStr.sav")
+                }
             }
+            if(filename == "config" && content != null) {
+                val writeBackup = FileOutputStream(backupFile)
+                for (str in content?.lines()!!) {
+                    if (!matches) {
+                        if (str.contains("BackUp DeviceProfile"))
+                            matches = true
+                    } else {
+                        if (str.contains("UserCustom DeviceProfile")) break
+                        if (str.isBlank()) continue
+                        writeBackup.write(str.toByteArray())
+                        writeBackup.write("\n".toByteArray())
+                    }
+                }
+            }
+            return true
+        } catch (e: Exception) {
+            debug("Error ${e.message}")
+            e.printStackTrace()
+            return false
         }
     }
+    private fun loadConfigs(isBackUp: Boolean = true): Boolean {
+        try {
+            var content: String? = null
+            var contentSav: String? = null
+            var status = true
+            val toFile = File("$filesDir/$versionStr.ini")
+            val toSav = File("$filesDir/$versionStr.sav")
+            val backupFile = File("${filesDir}/backup${Companion.versionStr}.ini")
+            var matches = false
+            if (isSAF) {
+                debug("from android 10")
+                val treeUri =
+                    sharedpref.getString("userCustom${Companion.versionStr}Uri", null).let {
+                        if (it == null) toast(this, "Failed permission 0")
+                        DocumentFile.fromTreeUri(this, Uri.parse(it))
+                    }
+                treeUri?.findFile("UserCustom.ini").also {
+                    if (it == null) toast(this, "File UserCustom not found -6")
+                    else content = helper.readContent(this, it.uri, "$versionStr.ini")
+                }
+                val treeUriSav =
+                    sharedpref.getString("active${Companion.versionStr}Uri", null).let {
+                        if (it == null) toast(this, "Failed permission -1")
+                        DocumentFile.fromTreeUri(this, Uri.parse(it))
+                    }
+                treeUriSav?.findFile("Active.sav").also {
+                    if (it == null) toast(this, "File Sav not found -4")
+                    else contentSav = helper.readContent(this, it.uri, "$versionStr.sav")
+                }
+            } else {
+                val fromConfigFile = File("${Utils.externalStorageDir}/$configPath/UserCustom.ini")
+                val fromSavFile = File("${Utils.externalStorageDir}/$savPath/Active.sav")
+                content = fromConfigFile.readText()
+                contentSav = fromSavFile.readText()
+                debug("from android below 10")
+                toFile.writeText(fromConfigFile.readText())
+                toSav.writeText(fromSavFile.readText())
+            }
+            if(isBackUp && content != null) {
+                val writeBackup = FileOutputStream(backupFile)
+                for (str in content?.lines()!!) {
+                    if (!matches) {
+                        if (str.contains("BackUp DeviceProfile"))
+                            matches = true
+                    } else {
+                        if (str.contains("UserCustom DeviceProfile")) break
+                        if (str.isBlank()) continue
+                        writeBackup.write(str.toByteArray())
+                        writeBackup.write("\n".toByteArray())
+                    }
+                }
+            }
+            return true
+        } catch (e: Exception) {
+            debug("Error ${e.message}")
+            return false
+        }
+    }
+    private fun loadConfig(isSelf: Boolean = false) {
+        try {
+            var content: String? = null
+            var status: Boolean = true
+            val strBuilder = StringBuilder()
+            if(isSelf) {
+                val check = File("$filesDir/UserCustom.ini")
+                if (check.exists() and check.isFile and check.canRead()){
+                    content = check.readText()
+                } else toast(this, "File UserCustom not found")
+            } else {
+                if (isSAF) {
+                    debug("from android 111")
+                    val treeUri =
+                        sharedpref.getString("userCustom${versionStr}Uri", null).let {
+                            if (it == null) toast(this, "Failed permission")
+                            DocumentFile.fromTreeUri(this, Uri.parse(it))
+                        }
+                    val check = treeUri?.findFile("UserCustom.ini").also { it ->
+                        if (it == null) toast(this, "File UserCustom not found")
+                        else {
+                            content = helper.readContent(this, it.uri, "UserCustom.ini")
+                        }
+                    }
+                } else {
+                    debug("from android below 11")
+                    val from = File("${Utils.externalStorageDir}/$configPath/UserCustom.ini")
+                    content = from.readText()
+                }
+            }
+            var matches = false
+            for (str in content?.lines()!!) {
+                if (!matches) {
+                    if (str.contains("UserCustom DeviceProfile")) matches = true
+                } else {
+                    if (str.contains("BackUp DeviceProfile")) break
+                    strBuilder.append(str)
+                    strBuilder.append("\n")
+                }
+            }
+            binding.editconfig.setText(strBuilder.toString().split("\n").filter { it.isNotBlank() }.joinToString("\n"))
+        } catch (e: Exception) {
+            debug("Error ${e.message}")
+            e.printStackTrace()
+        }
+    }
+
     private fun readConfig(versionStr: String) {
-        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q){
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.R){
             sharedpref.getString("userCustom${versionStr}Uri", null).let {
                 if(it != null) {
                     if (!permissionGranted(it)) {
@@ -437,60 +800,6 @@ class MainActivity : AppCompatActivity() {
             debug(" Uri log: $uri")
         }
         debug(" Uri log: $uriList")
-        try {
-            //val userCustom = tree.findFile("UserCustom.ini")
-            var userCustomPath = File(Environment.getExternalStorageDirectory().path+"/Android/data/${pkgApp}${stringPath}Config/Android").path
-            var activeSavPath = File(Environment.getExternalStorageDirectory().path+"/Android/data/${pkgApp}${stringPath}SaveGames").path
-            var asfadfadf = File(Environment.getExternalStorageDirectory().path+"/Android/data/com.tencent.ig/files/iMSDK").path
-            val testt = DocumentFile.fromTreeUri(this,helper.toTreeUri(asfadfadf))
-            testt?.renameTo("anjay")
-            debug(" active ${helper.toTreeUri(activeSavPath)}")
-            debug(" ucustom ${helper.toTreeUri(userCustomPath)}")
-            debug(" toTreeUri  ${helper.toTreeUri(userCustomPath)}")
-            val treeActive = DocumentFile.fromTreeUri(this,helper.toTreeUri(activeSavPath))
-            val treeUserCustom = DocumentFile.fromTreeUri(this,helper.toTreeUri(userCustomPath))
-            debug(" treeUserCustom  ${treeUserCustom?.toString()}")
-            val checkActive = treeActive?.findFile("Active.sav")?.let {
-                if(it.exists() and (it.isFile) and it.canRead()){
-                    debug("Active exists")
-                    it.uri
-                } else {
-                    debug("Active not exist")
-                    it.uri
-                }
-            }
-            val checkUserCustom = treeUserCustom?.findFile("UserCustom.ini")?.let {
-                if(it.exists() and (it.isFile) and it.canRead()){
-                    debug("UserCustom exists")
-                    it.uri
-                } else {
-                    debug("UserCustom not exist")
-                    it.uri
-                }
-            }
-            debug(" check active $checkActive")
-            debug(" check Usercustom $checkUserCustom")
-            debug(" treeActive $treeActive")
-//            if(userCustom!!.isFile and userCustom!!.canRead()){
-//                //val testcreate = tree.createFile("text/","test.txt")
-//                //val asuu = DocumentsContract.copyDocument()
-//                //debug("${testcreate?.name} ${testcreate?.uri}")
-//
-//                val in_s = resources.openRawResource(R.raw.active)
-//                val b = ByteArray(in_s.available())
-//                in_s.read(b)
-//                helper.writeContent(this, userCustom.uri, b)
-//                helper.writeContent(this, activeSav.toUri(), b)
-//                debug("start to copy")
-//                val status = helper.copyToData(this,"UserCustom.ini", userCustom.uri)
-//                debug(status.toString())
-//            } else {
-//                toast(this,"UserCustom tidak ditemukan")
-//                debug("UserCustom not exist")
-//            }
-        } catch (e: Exception) {
-            debug("error ${e.toString()}")
-        }
     }
     private fun listFiles(folder: DocumentFile): List<Uri> {
         return if (folder.isDirectory) {
@@ -499,6 +808,5 @@ class MainActivity : AppCompatActivity() {
             }
         } else emptyList()
     }
-
 }
 

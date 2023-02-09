@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import id.khenji.khmega.MainActivity.Companion.debug
+import id.khenji.khmega.MainActivity.Companion.toast
 import java.io.*
 
 
@@ -116,6 +117,7 @@ class Helper {
                 "File not Found"
             }
         } catch (e: IOException) {
+            toast(ctx, "Error: ${e.message}")
             e.printStackTrace()
             return ""
         }
@@ -123,25 +125,30 @@ class Helper {
     fun copyToData(ctx: Context, filename: String, newFile: String, uri: Uri): Boolean {
         var fis: InputStream? = null
         var fos: OutputStream? = null
-        var output: OutputStream?
-        var to: File
+        val output: OutputStream?
+        val to: File
         try {
             val tree = DocumentFile.fromTreeUri(ctx, uri)
-            val checkFile = tree!!.findFile(filename)
-            if(checkFile!!.exists() and checkFile!!.isFile) {
+            val checkFile = tree?.findFile(filename)
+            if(checkFile?.exists() == true && checkFile?.isFile == true) {
                 to = File("${ctx.filesDir}/$newFile")
                 output = FileOutputStream(to)
                 val content = ctx.contentResolver
-                fis = content.openInputStream(checkFile!!.uri)
+                fis = content.openInputStream(checkFile.uri)
                 fos = output
                 val buff = ByteArray(1024)
                 var length = 0
                 while (fis!!.read(buff).also { length = it } > 0) {
                     fos.write(buff, 0, length)
                 }
+            } else {
+                toast(ctx, "File $filename not found 0x1")
+                return false
+                //throw IOException("File $filename not found")
             }
         } catch (e: IOException) {
-            MainActivity.debug(e.toString())
+            debug(e.toString())
+            toast(ctx, "Error: ${e.message}")
             e.printStackTrace()
             return false
         } finally {
@@ -166,19 +173,124 @@ class Helper {
         }
         return true
     }
-    fun writeContent(ctx: Context, uri: Uri, content: ByteArray) {
+    fun copyToData(ctx: Context, filename: String, uri: Uri): Boolean {
+        var fis: InputStream? = null
+        var fos: OutputStream? = null
+        var output: OutputStream?
+        var to: File
         try {
-            MainActivity.debug("test write ${uri.path}")
+            to = File("${ctx.filesDir}/$filename")
+            output = FileOutputStream(to)
+            val content = ctx.contentResolver
+            fis = content.openInputStream(uri)
+            fos = output
+            val buff = ByteArray(1024)
+            var length = 0
+            while (fis!!.read(buff).also { length = it } > 0) {
+                fos.write(buff, 0, length)
+            }
+        } catch (e: IOException) {
+            debug(e.toString())
+            toast(ctx, "Error: ${e.message}")
+            e.printStackTrace()
+            return false
+        } finally {
+            if (fis != null) {
+                try {
+                    fis.close()
+                } catch (e: IOException) {
+                    MainActivity.debug(e.toString())
+                    e.printStackTrace()
+                    return false
+                }
+            }
+            if (fos != null) {
+                try {
+                    fos.close()
+                } catch (e: IOException) {
+                    MainActivity.debug(e.toString())
+                    e.printStackTrace()
+                    return false
+                }
+            }
+        }
+        return true
+    }
+    fun delete(ctx: Context, filename: String, uri: Uri): Boolean {
+        return try {
+            val tree = DocumentFile.fromTreeUri(ctx, uri)
+            tree?.findFile(filename).let {
+                if(it != null) {
+                    return it.exists() && it.isFile && it.delete()
+                }
+            }
+            false
+        } catch (e: Exception) {
+            e.message?.let { debug(it) }
+            false
+        }
+    }
+    fun writeContent(ctx: Context, uri: Uri, content: ByteArray): Boolean {
+        return try {
             ctx.contentResolver.openFileDescriptor(uri, "w")?.use { it ->
                 FileOutputStream(it.fileDescriptor).use { output ->
-                    //output.write(("Test write content ${System.currentTimeMillis()}\n").toByteArray())
                     output.write(content)
                 }
             }
+            true
         } catch (e: FileNotFoundException) {
+            toast(ctx, "Error: ${e.message}")
             e.printStackTrace()
+            false
         } catch (e: IOException) {
             e.printStackTrace()
+            false
+        }
+    }
+    fun copyFile(ctx: Context, filename: String, uri: Uri): Boolean {
+        return try {
+            val to = DocumentFile.fromTreeUri(ctx, uri)
+            to!!.findFile(filename)?.let {
+                if (it.exists() and it.isFile) it.delete() else false
+            }
+            val uir: DocumentFile? = to.createFile("text/", filename)
+            ctx.contentResolver.openOutputStream(uir!!.uri)!!.use { output ->
+                ctx.openFileInput(filename)?.use { input ->
+                    val buff = ByteArray(1024)
+                    var length = 0
+                    while (input.read(buff).also { length = it } > 0) {
+                        output.write(buff, 0, length)
+                    }
+                }
+
+            }
+            true
+        } catch (e: IOException) {
+            false
+        }
+    }
+    fun readContent(ctx: Context, uri: Uri, to: String): String {
+        return try {
+            val dest = File("${ctx.filesDir}/$to")
+            ctx.contentResolver.openFileDescriptor(uri, "r")?.use { fd ->
+                FileInputStream(fd.fileDescriptor).use { input ->
+                    FileOutputStream(dest).use { output ->
+                        val buffer = ByteArray(1024)
+                        var length = 0
+                        while (input.read(buffer).also { length = it } > 0) {
+                            output.write(buffer, 0, length)
+                        }
+                    }
+                }
+            }
+            dest.readText()
+        } catch (e: FileNotFoundException) {
+            toast(ctx, "Error: ${e.message}")
+            e.printStackTrace()
+            "Error: ${e.message}"
+        } catch (e: IOException) {
+            e.printStackTrace()
+            "Error: ${e.message}"
         }
     }
 }
