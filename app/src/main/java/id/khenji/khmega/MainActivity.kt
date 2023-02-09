@@ -319,7 +319,7 @@ class MainActivity : AppCompatActivity() {
             }
         } catch (e: Exception) {
             debug("Error: ${e.message}")
-            toast(this,"Error 0x18234")
+            toast(this,"Error 0x1 8234")
             isReady = false
             return false
         }
