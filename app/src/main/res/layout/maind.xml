@@ -76,7 +76,7 @@
             android:layout_marginBottom="8dp"
             android:contextClickable="true"
             android:text="Run"
-            android:visibility="visible"
+            android:visibility="gone"
             app:backgroundTint="#008DCD"
             app:fabSize="mini"
             app:srcCompat="@drawable/shuttle" />
@@ -90,7 +90,7 @@
             android:layout_gravity="bottom|end"
             android:layout_marginBottom="8dp"
             android:text="Save"
-            android:visibility="visible"
+            android:visibility="gone"
             app:fabSize="mini"
             app:srcCompat="@drawable/diskette" />
 
@@ -103,7 +103,7 @@
             android:layout_gravity="bottom|end"
             android:layout_marginBottom="8dp"
             android:text="Save"
-            android:visibility="visible"
+            android:visibility="gone"
             app:fabSize="mini"
             app:srcCompat="@drawable/sav" />
 
@@ -116,7 +116,7 @@
             android:layout_gravity="bottom|end"
             android:layout_marginBottom="8dp"
             android:text="Save"
-            android:visibility="visible"
+            android:visibility="gone"
             app:fabSize="mini"
             app:srcCompat="@drawable/load" />
 
