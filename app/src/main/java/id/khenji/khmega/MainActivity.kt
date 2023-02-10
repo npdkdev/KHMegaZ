@@ -1,7 +1,9 @@
 package id.khenji.khmega
 
 import android.Manifest.permission.*
+import android.app.Activity
 import android.content.Context
+import android.content.DialogInterface
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
@@ -9,6 +11,8 @@ import android.content.pm.PackageManager.NameNotFoundException
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.storage.StorageManager
 import android.provider.DocumentsContract
 import android.provider.Settings
@@ -18,6 +22,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.edit
 import androidx.core.widget.addTextChangedListener
@@ -26,6 +31,7 @@ import id.khenji.khmega.databinding.MaindBinding
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import kotlin.system.exitProcess
 
 
 class MainActivity : AppCompatActivity() {
@@ -35,6 +41,7 @@ class MainActivity : AppCompatActivity() {
 
     private var helper: Helper = Helper()
     private val asuw: Int.(Int) -> Int = fun Int.(thai: Int) = this + thai
+    private var dialog: AlertDialog.Builder? = null
 
     companion object {
         lateinit var pkgApp: String
@@ -73,6 +80,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         sharedpref =getSharedPreferences("khenji", MODE_PRIVATE)
         isFirstRun = sharedpref.getBoolean("firstrun", true)
+        dialog = AlertDialog.Builder(this)
         binding.pubgVersion.setOnCheckedChangeListener { radioGroup, i ->
             when (i){
                 R.id.korea_version -> {
@@ -154,15 +162,19 @@ class MainActivity : AppCompatActivity() {
         
         binding.fabRun.setOnClickListener {
             if(versionIsSelected()) {
-                if(isSAF) {
-                    val obbUri = Uri.parse(sharedpref.getString("obbUri", null))
-                    val dataUri = Uri.parse(sharedpref.getString("dataUri", null))
-                    obbUri?.renameTo(pkgApp)
-                    dataUri?.renameTo(pkgApp)
-                    openSettings(pkgApp)
-                } else {
-                    pkgApp.renameTo()
-                    openSettings(pkgApp)
+                !isReady && run { toast(this, "Tidak ada config yang disimpan"); false }
+                isReady && run {
+                    if (isSAF) {
+                        val obbUri = Uri.parse(sharedpref.getString("obbUri", null))
+                        val dataUri = Uri.parse(sharedpref.getString("dataUri", null))
+                        obbUri?.renameTo(pkgApp)
+                        dataUri?.renameTo(pkgApp)
+                        openSettings(pkgApp)
+                    } else {
+                        pkgApp.renameTo()
+                        openSettings(pkgApp)
+                    }
+                    true
                 }
             }
         }
@@ -322,6 +334,30 @@ class MainActivity : AppCompatActivity() {
             toast(this,"Error 0x1 8234")
             isReady = false
             return false
+        }
+    }
+    private fun showDialog(title: String) {
+        Handler(Looper.getMainLooper()).postDelayed({
+            dialog?.setTitle(title)
+            dialog?.setPositiveButton("JALANKAN") { _, _ ->
+                pkgApp.runApp()
+            }
+            dialog?.setNegativeButton("BATAL") { _, _ ->
+            }
+            dialog?.setCancelable(false);
+            dialog?.show()
+        },300)
+    }
+    private fun String.runApp() {
+        try {
+            val launchIntent = packageManager.getLaunchIntentForPackage(this)
+            startActivity(launchIntent)
+            finishAffinity();
+            finishAndRemoveTask()
+            exitProcess(0)
+        } catch (e: NameNotFoundException) {
+            e.printStackTrace()
+            toast(applicationContext, "PUBG MOBILE NOT FOUND")
         }
     }
     private fun versionIsSelected(): Boolean {
@@ -567,6 +603,7 @@ class MainActivity : AppCompatActivity() {
                 val dataUri = Uri.parse(sharedpref.getString("dataUri", null))
                 obbUri?.renameTo(pkgApp)
                 dataUri?.renameTo(pkgApp)
+                showDialog("JALANKAN PUBG MOBILE?")
             }
         }
     }
@@ -586,6 +623,7 @@ class MainActivity : AppCompatActivity() {
             }
         } else if (resultCode == RESULT_CANCELED && requestCode == reqDetailsApp) {
             pkgApp.renameTo()
+            showDialog("JALANKAN PUBG MOBILE?")
         }
     }
     private fun appInstalledOrNot(uri: String): Boolean {

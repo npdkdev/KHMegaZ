@@ -15,7 +15,6 @@ import android.provider.Settings
 import android.view.View
 import android.view.WindowManager
 import android.webkit.*
-import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
@@ -98,6 +97,9 @@ class Splash : AppCompatActivity() {
             myintent.addCategory("android.intent.category.DEFAULT")
             myintent.data = Uri.fromParts("package", packageName, null)
             startForResult.launch(myintent)
+        } else {
+            startActivity(Intent(this@Splash, MainActivity::class.java))
+            finishAffinity()
         }
     }
     override fun onRequestPermissionsResult(
