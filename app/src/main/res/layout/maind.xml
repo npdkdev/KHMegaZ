@@ -42,7 +42,6 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_weight="1"
-            android:background="#F8F8F8"
             android:fontFamily="sans-serif"
             android:gravity="start"
             android:hint="UserCustom.ini"
@@ -77,7 +76,6 @@
             android:contextClickable="true"
             android:text="Run"
             android:visibility="gone"
-            app:backgroundTint="#008DCD"
             app:fabSize="mini"
             app:srcCompat="@drawable/shuttle" />
 

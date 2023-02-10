@@ -414,7 +414,6 @@ class MainActivity : AppCompatActivity() {
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun requestPerms(path: String): Boolean {
         return if(isSAF) {
-            if(isFirstRun && Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) requestAllFilesPermission()
             checkPerm(reqActive) && checkPerm(reqUserCustom)
         } else {
             true
@@ -471,14 +470,6 @@ class MainActivity : AppCompatActivity() {
         i.putExtra(DocumentsContract.EXTRA_INITIAL_URI, nuri)
         @Suppress("DEPRECATION")
         startActivityForResult(i, 999)
-    }
-   // @RequiresApi(Build.VERSION_CODES.R)
-    private fun requestAllFilesPermission() {
-        val myintent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-        //val myintent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-        myintent.addCategory("android.intent.category.DEFAULT")
-        myintent.data = Uri.fromParts("package",packageName,null)
-        startActivity(myintent)
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
