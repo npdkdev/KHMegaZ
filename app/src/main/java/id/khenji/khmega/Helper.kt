@@ -219,12 +219,11 @@ class Helper {
     fun delete(ctx: Context, filename: String, uri: Uri): Boolean {
         return try {
             val tree = DocumentFile.fromTreeUri(ctx, uri)
-            tree?.findFile(filename).let {
-                if(it != null) {
-                    return it.exists() && it.isFile && it.delete()
-                }
+            return tree?.findFile(filename).let { its ->
+                if(its != null) {
+                    its.exists() && its.isFile && its.delete()
+                } else false
             }
-            false
         } catch (e: Exception) {
             e.message?.let { debug(it) }
             false

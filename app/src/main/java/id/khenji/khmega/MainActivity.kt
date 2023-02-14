@@ -1,36 +1,28 @@
 package id.khenji.khmega
 
 import android.Manifest.permission.*
-import android.app.Activity
-import android.content.Context
-import android.content.DialogInterface
-import android.content.Intent
-import android.content.SharedPreferences
+import android.content.*
 import android.content.pm.PackageManager
 import android.content.pm.PackageManager.NameNotFoundException
+import android.content.res.Configuration
+import android.graphics.Color
 import android.net.Uri
-import android.os.Build
-import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
+import android.os.*
 import android.os.storage.StorageManager
 import android.provider.DocumentsContract
 import android.provider.Settings
 import android.util.Log
 import android.view.View
-import android.widget.TextView
-import android.widget.Toast
+import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.*
 import androidx.core.content.edit
 import androidx.core.widget.addTextChangedListener
 import androidx.documentfile.provider.DocumentFile
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import id.khenji.khmega.databinding.MaindBinding
-import java.io.File
-import java.io.FileOutputStream
-import java.io.IOException
+import java.io.*
 import kotlin.system.exitProcess
 
 
@@ -41,11 +33,13 @@ class MainActivity : AppCompatActivity() {
 
     private var helper: Helper = Helper()
     private val asuw: Int.(Int) -> Int = fun Int.(thai: Int) = this + thai
-    private var dialog: AlertDialog.Builder? = null
+    private var udialog: MaterialAlertDialogBuilder? = null
 
     companion object {
         lateinit var pkgApp: String
         val isSAF = Build.VERSION.SDK_INT > Build.VERSION_CODES.Q
+        val isSDK = Build.VERSION.SDK_INT
+        const val isTIRAMISU = Build.VERSION_CODES.TIRAMISU
         var fabVisible = false
         var versionStr: String? = null
         var versionApp: String? = null
@@ -53,22 +47,31 @@ class MainActivity : AppCompatActivity() {
         const val pkgGlobal = "com.tencent.ig"
         const val pkgKorea = "com.pubg.krmobile"
         var stringPath: String = "/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/"
-        var configPath: String = "/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android"
+        var configPath: String =
+            "/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/Config/Android"
         var savPath: String = "/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/SaveGames"
+
+        /* TODO : for A13 remove pkg on builds */
         var dataPath: String = "/Android/data/"
         var obbPath: String = "/Android/obb/"
+        var newObbPath: String? = null
+        var newDataPath: String? = null
         const val reqObb: Int = 9900
+        const val reqNewObb: Int = 9906
+        const val reqNewData: Int = 9907
         const val reqData: Int = 9901
         const val reqActive: Int = 9902
         const val reqUserCustom: Int = 9903
         const val reqDetailsApp = 9904
         const val reqPicker = 9905
+        var nightmode = false
         var reqNow = 0
         var isReady = false
-        fun debug(msg: String, tag: String = "KHMEGA"){
+        fun debug(msg: String, tag: String = "KHMEGA") {
             Log.d(tag, msg)
         }
-        fun toast(ctx: Context, msg: String, duration: Int = Toast.LENGTH_SHORT){
+
+        fun toast(ctx: Context, msg: String, duration: Int = Toast.LENGTH_SHORT) {
             Toast.makeText(ctx, msg, duration).show()
         }
     }
@@ -78,31 +81,10 @@ class MainActivity : AppCompatActivity() {
 
         binding = MaindBinding.inflate(layoutInflater)
         setContentView(binding.root)
-        sharedpref =getSharedPreferences("khenji", MODE_PRIVATE)
+        sharedpref = getSharedPreferences("khenji", MODE_PRIVATE)
         isFirstRun = sharedpref.getBoolean("firstrun", true)
-        dialog = AlertDialog.Builder(this)
-        binding.pubgVersion.setOnCheckedChangeListener { radioGroup, i ->
-            when (i){
-                R.id.korea_version -> {
-                    versionStr = "Korea"
-                    if(!appInstalledOrNot(pkgKorea)) {
-                        clearVersion(sav = false, config = false)
-                        toast(this, "Korea tidak terinstall")
-                    } else {
-                        setupVersion("korea")
-                    }
-                }
-                R.id.global_version -> {
-                    versionStr = "Global"
-                    if(!appInstalledOrNot(pkgGlobal)) {
-                        clearVersion(sav = false, config = false)
-                        toast(this, "Global tidak terinstall")
-                    } else {
-                        setupVersion("global")
-                    }
-                }
-            }
-        }
+        udialog = MaterialAlertDialogBuilder(this)
+        binding.pubgVersion.setOnCheckedChangeListener(onCheckedListener)
         binding.fabShow.setOnClickListener { _ ->
             if (!fabVisible) {
                 fabVisible = true
@@ -116,7 +98,7 @@ class MainActivity : AppCompatActivity() {
                 binding.fabSav.visibility = View.VISIBLE
                 binding.fabShow.setImageDrawable(resources.getDrawable(android.R.drawable.ic_menu_close_clear_cancel))
             } else {
-                fabVisible =  false
+                fabVisible = false
                 binding.fabSave.hide()
                 binding.fabSav.hide()
                 binding.fabRun.hide()
@@ -133,7 +115,7 @@ class MainActivity : AppCompatActivity() {
             File("${filesDir}/Active.sav").delete()
         }
         binding.fabSav.setOnClickListener {
-            if(versionIsSelected()) {
+            if (versionIsSelected()) {
                 val inte = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                     addCategory(Intent.CATEGORY_OPENABLE)
                     type = "*/*"
@@ -145,12 +127,12 @@ class MainActivity : AppCompatActivity() {
             }
         }
         binding.fabLoad.setOnClickListener {
-            if(versionIsSelected()) {
+            if (versionIsSelected()) {
                 versionStr?.let { it1 -> loadConfig(isSelf = true) }
             }
         }
         binding.fabLoad.setOnLongClickListener {
-            if(versionIsSelected()) {
+            if (versionIsSelected()) {
                 versionStr?.let { it1 -> loadConfig(isSelf = false) }
             }
             true
@@ -159,9 +141,9 @@ class MainActivity : AppCompatActivity() {
         binding.editconfig.addTextChangedListener {
             //debug(it.toString())
         }
-        
+
         binding.fabRun.setOnClickListener {
-            if(versionIsSelected()) {
+            if (versionIsSelected()) {
                 !isReady && run { toast(this, "Tidak ada config yang disimpan"); false }
                 isReady && run {
                     if (isSAF) {
@@ -179,12 +161,13 @@ class MainActivity : AppCompatActivity() {
             }
         }
         binding.fabSave.setOnClickListener {
-            if(versionIsSelected()) {
+            if (versionIsSelected()) {
                 try {
                     val saveFile = File("${filesDir}/UserCustom.ini")
                     val backupFile = File("${filesDir}/backup$versionStr.ini")
-                    val content = binding.editconfig.text.split("\n").filter { it.isNotBlank() }.joinToString("\n")
-                    if(content.isEmpty() || content.lines().size < 10){
+                    val content = binding.editconfig.text.split("\n").filter { it.isNotBlank() }
+                        .joinToString("\n")
+                    if (content.isEmpty() || content.lines().size < 10) {
                         toast(this, "Format Config Salah -2")
                     } else if (content.contains("BackUp DeviceProfile") or content.contains("UserCustom DeviceProfile")) {
                         toast(this, "Format Config Salah")
@@ -201,7 +184,7 @@ class MainActivity : AppCompatActivity() {
                             output.write(stringBuilder.toString().toByteArray())
                         }
                         configIsReady().also {
-                            if(it) toast(this,"Config saved..") else toast(this, "Failed to save")
+                            if (it) toast(this, "Config saved..") else toast(this, "Failed to save")
                         }
                     }
                 } catch (ee: NullPointerException) {
@@ -215,15 +198,43 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) {
+        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q && Build.VERSION.SDK_INT < isTIRAMISU) {
             checkPerm(reqObb)
         }
         // clear sav first
         clearVersion(config = false)
     }
+
+    val onCheckedListener = RadioGroup.OnCheckedChangeListener { _, i ->
+        when (i) {
+            R.id.korea_version -> {
+                versionStr = "Korea"
+                if (!appInstalledOrNot(pkgKorea)) {
+                    clearVersion(sav = false, config = false)
+                    toast(this, "Korea tidak terinstall")
+                } else {
+                    setupVersion("korea")
+                }
+            }
+            R.id.global_version -> {
+                versionStr = "Global"
+                if (!appInstalledOrNot(pkgGlobal)) {
+                    clearVersion(sav = false, config = false)
+                    toast(this, "Global tidak terinstall")
+                } else {
+                    setupVersion("global")
+                }
+            }
+            else -> {}
+        }
+    }
     private fun clearVersion(sav: Boolean = true, config: Boolean = true): Boolean {
         return try {
+            binding.pubgVersion.setOnCheckedChangeListener(null)
             binding.pubgVersion.clearCheck()
+            binding.pubgVersion.setOnCheckedChangeListener(onCheckedListener)
+            binding.editconfig.setText("")
+            isReady = false
             sav && File("${filesDir}/Active.sav").delete()
             config && File("${filesDir}/UserCustom.ini").delete()
             versionApp = null
@@ -239,6 +250,7 @@ class MainActivity : AppCompatActivity() {
             false
         }
     }
+
     private fun configIsReady(): Boolean {
         val uCustom = "UserCustom.ini"
         val activeSav = "Active.sav"
@@ -272,7 +284,8 @@ class MainActivity : AppCompatActivity() {
                         if (it.exists() == true and (it.isFile) and (it.canRead())) {
                             it.uri.let { ur ->
                                 debug(helper.delete(this, "UserCustom.ini", ur).toString())
-                                val createFile = treeUserCustom?.createFile("text/", "UserCustom.ini")
+                                val createFile =
+                                    treeUserCustom?.createFile("text/", "UserCustom.ini")
                                 createFile?.uri?.let { uriFile ->
                                     helper.writeContent(
                                         this,
@@ -331,23 +344,43 @@ class MainActivity : AppCompatActivity() {
             }
         } catch (e: Exception) {
             debug("Error: ${e.message}")
-            toast(this,"Error 0x1 8234")
+            toast(this, "Error 0x1 8234")
             isReady = false
             return false
         }
     }
+
+    override fun onStart() {
+        super.onStart()
+        when (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) {
+            Configuration.UI_MODE_NIGHT_NO -> {
+                nightmode = false
+            }
+            Configuration.UI_MODE_NIGHT_YES -> {
+                nightmode = true
+            }
+        }
+    }
     private fun showDialog(title: String) {
         Handler(Looper.getMainLooper()).postDelayed({
-            dialog?.setTitle(title)
-            dialog?.setPositiveButton("JALANKAN") { _, _ ->
+            udialog?.setMessage(title)
+            udialog?.setPositiveButton("JALANKAN") { _, _ ->
+                clearVersion()
                 pkgApp.runApp()
             }
-            dialog?.setNegativeButton("BATAL") { _, _ ->
+            udialog?.setNegativeButton("BATAL") { _, _ ->
+                clearVersion()
             }
-            dialog?.setCancelable(false);
-            dialog?.show()
-        },300)
+            udialog?.setCancelable(false)
+            udialog?.show()?.also {
+                if (!nightmode) {
+                    it.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(Color.GRAY)
+                    it.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(Color.GRAY)
+                }
+            }
+        }, 300)
     }
+
     private fun String.runApp() {
         try {
             val launchIntent = packageManager.getLaunchIntentForPackage(this)
@@ -360,14 +393,16 @@ class MainActivity : AppCompatActivity() {
             toast(applicationContext, "PUBG MOBILE NOT FOUND")
         }
     }
+
     private fun versionIsSelected(): Boolean {
-        return if(binding.pubgVersion.checkedRadioButtonId == -1 && versionApp == null) {
+        return if (binding.pubgVersion.checkedRadioButtonId == -1 && versionApp == null) {
             toast(this, "Select version first")
             false
         } else true
     }
-    private fun setupVersion(pkg: String){
-        pkgApp = when(pkg){
+
+    private fun setupVersion(pkg: String) {
+        pkgApp = when (pkg) {
             "global" -> pkgGlobal
             "korea" -> pkgKorea
             else -> pkgGlobal
@@ -380,36 +415,62 @@ class MainActivity : AppCompatActivity() {
             putString("pkg_version", pkgApp)
             apply()
         }
-        if(sharedpref.getString(pkgApp,null) == null){
+        if (sharedpref.getString(pkgApp, null) == null) {
             if (Build.VERSION.SDK_INT > Build.VERSION_CODES.Q) {
-                requestPerms(savPath)
+                if (isSDK >= isTIRAMISU) {
+                    newObbPath = "$obbPath$pkgApp"
+                    newDataPath = "$dataPath$pkgApp"
+                    checkPerm(reqObb, true)
+                } else requestPerms(savPath)
             } else {
                 !isExist("${versionStr}.ini") && clearVersion()
                 !isExist("${versionStr}.sav") && clearVersion()
             }
         }
     }
-    private fun Uri.renameTo(pkg: String) {
+
+    private fun Uri.renameTo(pkg: String, reqAgain: Boolean = false) {
         val uri = this
         try {
             val tree = DocumentFile.fromTreeUri(this@MainActivity, uri)
             var status = false
-            tree?.findFile(pkg)?.let {
-                if (it.isDirectory){
-                    if(it.renameTo("${it.name}_khenji"))status=true
-                }
-            }
-            if (!status){
-                tree?.findFile("${pkg}_khenji")?.let {
-                    if (it.isDirectory){
-                        if(it.renameTo("${pkg}"))status=true
+            /* TODO: change to androi 13 after build */
+            if (isSDK >= isTIRAMISU) {
+                if (reqAgain) {
+                    val newObbPath2: String = newObbPath!!.replace(pkg, "${pkg}_khenji")
+                    requestDocumentPermission(newObbPath2, reqNewObb)
+                } else {
+                    tree.let {
+                        if (it != null) {
+                            if (it.isDirectory) {
+                                it.renameTo("${it.name}_khenji")
+                            } else {
+                                toast(this@MainActivity, "Error to rename -4")
+                            }
+                        } else {
+                            toast(this@MainActivity, "Error to rename -5")
+                        }
                     }
+                }
+            } else {
+                tree?.findFile(pkg)?.also {
+                    if (it.isDirectory) {
+                        it.renameTo("${it.name}_khenji")
+                    }
+                } == null && tree?.findFile("${pkg}_khenji")?.also {
+                    if (it.isDirectory) {
+                        it.renameTo(pkg)
+                    }
+                } != null && run {
+                    debug("sukses")
+                    true
                 }
             }
         } catch (e: Exception) {
             e.printStackTrace()
         }
     }
+
     // rename for android 10 or below
     private fun String.renameTo() {
         try {
@@ -422,10 +483,10 @@ class MainActivity : AppCompatActivity() {
             val obbDestPath =
                 File("${Utils.externalStorageDir}/Android/obb/${pkg}_khenji")
 
-            if (dataPath.exists())dataPath.renameTo(dataDestPath)
-            else if (dataDestPath.exists())dataDestPath.renameTo(dataPath)
+            if (dataPath.exists()) dataPath.renameTo(dataDestPath)
+            else if (dataDestPath.exists()) dataDestPath.renameTo(dataPath)
             if (obbPath.exists()) obbPath.renameTo(obbDestPath)
-            else if (obbDestPath.exists())obbDestPath.renameTo(obbPath)
+            else if (obbDestPath.exists()) obbDestPath.renameTo(obbPath)
         } catch (e: IOException) {
             debug(e.toString())
         }
@@ -447,54 +508,81 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun requestPerms(path: String): Boolean {
-        return if(isSAF) {
+        return if (isSAF) {
             checkPerm(reqActive) && checkPerm(reqUserCustom)
         } else {
             true
         }
     }
+
     @RequiresApi(Build.VERSION_CODES.Q)
-    private fun checkPerm(reqCode: Int): Boolean {
+    private fun checkPerm(reqCode: Int, isA13: Boolean = false): Boolean {
         when (reqCode) {
             reqActive -> {
                 sharedpref.getString("active${versionStr}Uri", null).let {
-                    if (it == null)requestDocumentPermission(savPath, reqCode)
+                    if (it == null) requestDocumentPermission(savPath, reqCode)
                     if (it != null) {
-                        if(!permissionGranted(it))requestDocumentPermission(savPath, reqCode)
+                        if (!permissionGranted(it)) requestDocumentPermission(savPath, reqCode)
                         else !isExist("${versionStr}.sav") && clearVersion(); return true
                     }
                 }
             }
             reqUserCustom -> {
                 sharedpref.getString("userCustom${versionStr}Uri", null).let {
-                    if (it == null) requestDocumentPermission("$configPath", reqCode)
+                    if (it == null) requestDocumentPermission(configPath, reqCode)
                     if (it != null) {
-                        if(!permissionGranted(it))requestDocumentPermission("$configPath", reqCode)
+                        if (!permissionGranted(it)) requestDocumentPermission(configPath, reqCode)
                         else !isExist("${versionStr}.ini") && clearVersion(); return true
                     }
                 }
             }
             reqData -> {
                 sharedpref.getString("dataUri", null).let {
-                    if (it == null) requestDocumentPermission("$dataPath", reqCode)
+                    if (it == null) {
+                        if (isSDK >= isTIRAMISU) requestDocumentPermission(
+                            "$dataPath$pkgApp",
+                            reqCode
+                        )
+                        else requestDocumentPermission(dataPath, reqCode)
+                    }
                     if (it != null) {
-                        if(!permissionGranted(it))requestDocumentPermission("$dataPath", reqCode) else return true
+                        if (!permissionGranted(it)) {
+                            if (isSDK >= isTIRAMISU) requestDocumentPermission(
+                                "$dataPath$pkgApp",
+                                reqCode
+                            )
+                            else requestDocumentPermission(dataPath, reqCode)
+                        } else return true
                     }
                 }
             }
             reqObb -> {
                 sharedpref.getString("obbUri", null).let {
-                    if (it == null) requestDocumentPermission("$obbPath", reqCode)
+                    if (it == null) {
+                        if (isSDK >= isTIRAMISU) requestDocumentPermission(
+                            "$obbPath$pkgApp",
+                            reqCode
+                        )
+                        else requestDocumentPermission(obbPath, reqCode)
+                    }
                     if (it != null) {
-                        if(!permissionGranted(it))requestDocumentPermission("$obbPath", reqCode) else return true
+                        if (!permissionGranted(it)) {
+                            if (isSDK >= isTIRAMISU) requestDocumentPermission(
+                                "$obbPath$pkgApp",
+                                reqCode
+                            )
+                            else requestDocumentPermission(obbPath, reqCode)
+                        } else return true
                     }
                 }
             }
         }
         return false
     }
+
     private fun askPermission(pck: String?) {
         if (pck != null) {
             debug(pck)
@@ -509,7 +597,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     @RequiresApi(Build.VERSION_CODES.Q)
-    private fun requestDocumentPermission(folder: String, requestCode: Int){
+    private fun requestDocumentPermission(folder: String, requestCode: Int) {
         reqNow = requestCode
         sharedpref.edit { putInt("reqNow", requestCode).commit() }
         val storageManager = application.getSystemService(Context.STORAGE_SERVICE) as StorageManager
@@ -527,16 +615,18 @@ class MainActivity : AppCompatActivity() {
         //startActivityForResult(intent, REQUEST_CODE)
         startForResult.launch(myintent)
     }
+
     private fun permissionGranted(uri: String): Boolean {
         val listPerm = contentResolver.persistedUriPermissions
         for (i in listPerm.indices) {
             val persistedUriString = listPerm[i].uri.toString()
-            if(persistedUriString == uri && listPerm[i].isWritePermission && listPerm[i].isReadPermission) {
+            if (persistedUriString == uri && listPerm[i].isWritePermission && listPerm[i].isReadPermission) {
                 return true
             }
         }
         return false
     }
+
     val isExist: (String) -> Boolean = fun(f: String): Boolean {
         return if (File("$filesDir/$f").exists()) {
             debug("file $f ada")
@@ -547,66 +637,109 @@ class MainActivity : AppCompatActivity() {
         }
         //return if !File("$filesDir/$f").exists() else helper.copyToData(this, "UserCustom.ini", "${versionStr}.ini", Uri.parse(sharedpref.getString("${versionStr}", null)))
     }
+
     fun html(initz: String.() -> Unit): String {
         val hehe = String()
         hehe.initz()
         return hehe
     }
+
     @RequiresApi(Build.VERSION_CODES.Q)
-    val startForResult = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        result ->
-        if (result.resultCode == RESULT_OK) {
-            if (result.data != null) {
-                val takeFlags = (Intent.FLAG_GRANT_READ_URI_PERMISSION
-                        or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-                result.data?.data?.let { treeUri ->
-                    contentResolver.takePersistableUriPermission(
-                        treeUri,
-                        takeFlags
-                    )
-                    when(reqNow) {
-                        reqObb -> {
-                            sharedpref.edit(commit = true, action = {
-                                this.putString("obbUri", treeUri.toString())
-                            })
-                            checkPerm(reqData)
+    val startForResult =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == RESULT_OK) {
+                if (result.data != null) {
+                    val takeFlags = (Intent.FLAG_GRANT_READ_URI_PERMISSION
+                            or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                    result.data?.data?.let { treeUri ->
+                        contentResolver.takePersistableUriPermission(
+                            treeUri,
+                            takeFlags
+                        )
+                        when (reqNow) {
+                            reqObb -> {
+                                sharedpref.edit(commit = true, action = {
+                                    this.putString("obbUri", treeUri.toString())
+                                })
+                                checkPerm(reqData)
+                            }
+                            reqData -> {
+                                sharedpref.edit(commit = true, action = {
+                                    this.putString("dataUri", treeUri.toString())
+                                })
+                                if (isSDK >= isTIRAMISU) checkPerm(reqUserCustom)
+                                else checkPerm(reqObb)
+                            }
+                            reqUserCustom -> {
+                                sharedpref.edit(commit = true, action = {
+                                    this.putString("userCustom${versionStr}Uri", treeUri.toString())
+                                })
+                                //!helper.copyToData(this, "UserCustom.ini", "${versionStr}.ini", treeUri) && clearVersion()
+                                !loadConfig("config") && clearVersion()
+                                checkPerm(reqActive)
+                            }
+                            reqActive -> {
+                                sharedpref.edit(commit = true, action = {
+                                    this.putString("active${versionStr}Uri", treeUri.toString())
+                                })
+                                //!helper.copyToData(this, "Active.sav", "${versionStr}.sav", treeUri) && clearVersion()
+                                !loadConfig("sav") && clearVersion()
+                                checkPerm(reqUserCustom)
+                            }
+                            reqNewObb -> {
+                                val tree = DocumentFile.fromTreeUri(this, treeUri)
+                                tree.let {
+                                    if (it == null) {
+                                        toast(this, "Error rename back -1")
+                                        false
+                                    } else if (it.isDirectory) {
+                                        it.renameTo(pkgApp)
+                                        true
+                                    } else {
+                                        toast(this, "Error rename back -2")
+                                        false
+                                    }
+                                } && run {
+                                    val newDataPath2: String =
+                                        newDataPath!!.replace(pkgApp, "${pkgApp}_khenji")
+                                    requestDocumentPermission(newDataPath2, reqNewData)
+                                    true
+                                }
+                            }
+                            reqNewData -> {
+                                val tree = DocumentFile.fromTreeUri(this, treeUri)
+                                tree.let {
+                                    if (it == null) {
+                                        toast(this, "Error rename back -3")
+                                        false
+                                    } else if (it.isDirectory) {
+                                        it.renameTo(pkgApp)
+                                        true
+                                    } else {
+                                        toast(this, "Error rename back -4")
+                                        false
+                                    }
+                                }
+                            }
+                            else -> {}
                         }
-                        reqData -> {
-                            sharedpref.edit(commit = true, action = {
-                                this.putString("dataUri", treeUri.toString())
-                            })
-                            checkPerm(reqObb)
-                        }
-                        reqUserCustom -> {
-                            sharedpref.edit(commit = true, action = {
-                                this.putString("userCustom${versionStr}Uri", treeUri.toString())
-                            })
-                            //!helper.copyToData(this, "UserCustom.ini", "${versionStr}.ini", treeUri) && clearVersion()
-                            !loadConfig("config") && clearVersion()
-                            checkPerm(reqActive)
-                        }
-                        reqActive -> {
-                            sharedpref.edit(commit = true, action = {
-                                this.putString("active${versionStr}Uri", treeUri.toString())
-                            })
-                            //!helper.copyToData(this, "Active.sav", "${versionStr}.sav", treeUri) && clearVersion()
-                            !loadConfig("sav") && clearVersion()
-                            checkPerm(reqUserCustom)
-                        }
-                        else -> {}
                     }
                 }
-            }
-        } else if (result.resultCode == RESULT_CANCELED) {
-            if (reqNow == reqDetailsApp || sharedpref.getInt("reqNow", 0) == reqDetailsApp) {
-                val obbUri = Uri.parse(sharedpref.getString("obbUri", null))
-                val dataUri = Uri.parse(sharedpref.getString("dataUri", null))
-                obbUri?.renameTo(pkgApp)
-                dataUri?.renameTo(pkgApp)
-                showDialog("JALANKAN PUBG MOBILE?")
+            } else if (result.resultCode == RESULT_CANCELED) {
+                if (reqNow == reqDetailsApp || sharedpref.getInt("reqNow", 0) == reqDetailsApp) {
+                    val obbUri = Uri.parse(sharedpref.getString("obbUri", null))
+                    val dataUri = Uri.parse(sharedpref.getString("dataUri", null))
+                    if (isSDK >= isTIRAMISU) {
+                        obbUri?.renameTo(pkgApp, reqAgain = true)
+                    } else {
+                        obbUri?.renameTo(pkgApp)
+                        dataUri?.renameTo(pkgApp)
+                    }
+                    showDialog("JALANKAN PUBG MOBILE?")
+                }
             }
         }
-    }
+
     @Suppress("DEPRECATION")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
@@ -617,15 +750,17 @@ class MainActivity : AppCompatActivity() {
                         grantUriPermission(packageName, uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                     helper.copyToData(ctx = this, filename = "Active.sav", uri = uri).also {
-                        if(it) toast(this,"Sav loaded")
+                        if (it) toast(this, "Sav loaded")
                     }
                 }
             }
         } else if (resultCode == RESULT_CANCELED && requestCode == reqDetailsApp) {
+            debug("from androi 10")
             pkgApp.renameTo()
             showDialog("JALANKAN PUBG MOBILE?")
         }
     }
+
     private fun appInstalledOrNot(uri: String): Boolean {
         val pm = packageManager
         val flags = 0
@@ -641,9 +776,13 @@ class MainActivity : AppCompatActivity() {
         }
         return false
     }
+
     private fun openSettings(packageName: String) {
-        val intt = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + packageName))
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        val intt = Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.parse("package:" + packageName)
+        )
+        if (isSDK > Build.VERSION_CODES.Q) {
             reqNow = reqDetailsApp
             startForResult.launch(intt)
             sharedpref.edit { putInt("reqNow", reqDetailsApp) }
@@ -652,6 +791,7 @@ class MainActivity : AppCompatActivity() {
             startActivityForResult(intt, reqDetailsApp)
         }
     }
+
     // for Storage Access Framework
     @RequiresApi(Build.VERSION_CODES.Q)
     private fun loadConfig(filename: String): Boolean {
@@ -660,7 +800,7 @@ class MainActivity : AppCompatActivity() {
             var status = true
             val backupFile = File("${filesDir}/backup${versionStr}.ini")
             var matches = false
-            if(filename == "config") {
+            if (filename == "config") {
                 val treeUri =
                     sharedpref.getString("userCustom${versionStr}Uri", null).let {
                         if (it == null) toast(this, "Failed permission 0")
@@ -670,7 +810,7 @@ class MainActivity : AppCompatActivity() {
                     if (it == null) toast(this, "File UserCustom not found -6")
                     else content = helper.readContent(this, it.uri, "$versionStr.ini")
                 }
-            } else if(filename == "sav") {
+            } else if (filename == "sav") {
                 val treeUriSav =
                     sharedpref.getString("active${versionStr}Uri", null).let {
                         if (it == null) toast(this, "Failed permission -1")
@@ -681,7 +821,7 @@ class MainActivity : AppCompatActivity() {
                     else helper.readContent(this, it.uri, "$versionStr.sav")
                 }
             }
-            if(filename == "config" && content != null) {
+            if (filename == "config" && content != null) {
                 val writeBackup = FileOutputStream(backupFile)
                 for (str in content?.lines()!!) {
                     if (!matches) {
@@ -702,6 +842,7 @@ class MainActivity : AppCompatActivity() {
             return false
         }
     }
+
     private fun loadConfigs(isBackUp: Boolean = true): Boolean {
         try {
             var content: String? = null
@@ -740,7 +881,7 @@ class MainActivity : AppCompatActivity() {
                 toFile.writeText(fromConfigFile.readText())
                 toSav.writeText(fromSavFile.readText())
             }
-            if(isBackUp && content != null) {
+            if (isBackUp && content != null) {
                 val writeBackup = FileOutputStream(backupFile)
                 for (str in content?.lines()!!) {
                     if (!matches) {
@@ -760,14 +901,15 @@ class MainActivity : AppCompatActivity() {
             return false
         }
     }
+
     private fun loadConfig(isSelf: Boolean = false) {
         try {
             var content: String? = null
             var status: Boolean = true
             val strBuilder = StringBuilder()
-            if(isSelf) {
+            if (isSelf) {
                 val check = File("$filesDir/UserCustom.ini")
-                if (check.exists() and check.isFile and check.canRead()){
+                if (check.exists() and check.isFile and check.canRead()) {
                     content = check.readText()
                 } else toast(this, "File UserCustom not found")
             } else {
@@ -800,7 +942,8 @@ class MainActivity : AppCompatActivity() {
                     strBuilder.append("\n")
                 }
             }
-            binding.editconfig.setText(strBuilder.toString().split("\n").filter { it.isNotBlank() }.joinToString("\n"))
+            binding.editconfig.setText(strBuilder.toString().split("\n").filter { it.isNotBlank() }
+                .joinToString("\n"))
         } catch (e: Exception) {
             debug("Error ${e.message}")
             e.printStackTrace()
@@ -808,19 +951,26 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun readConfig(versionStr: String) {
-        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.R){
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             sharedpref.getString("userCustom${versionStr}Uri", null).let {
-                if(it != null) {
+                if (it != null) {
                     if (!permissionGranted(it)) {
                         requestDocumentPermission("$configPath", reqUserCustom)
                     } else {
                         debug(it)
-                        binding.editconfig.setText(helper.readFromUri(this, "UserCustom.ini", Uri.parse(it)), TextView.BufferType.EDITABLE)
+                        binding.editconfig.setText(
+                            helper.readFromUri(
+                                this,
+                                "UserCustom.ini",
+                                Uri.parse(it)
+                            ), TextView.BufferType.EDITABLE
+                        )
                     }
                 }
             }
         }
     }
+
     private fun readSDK30(treeUri: Uri) {
         val tree = DocumentFile.fromTreeUri(this, treeUri)!!
         val uriList = arrayListOf<Uri>()
@@ -830,6 +980,7 @@ class MainActivity : AppCompatActivity() {
         }
         debug(" Uri log: $uriList")
     }
+
     private fun listFiles(folder: DocumentFile): List<Uri> {
         return if (folder.isDirectory) {
             folder.listFiles().mapNotNull { file ->

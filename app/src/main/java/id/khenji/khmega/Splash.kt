@@ -118,4 +118,5 @@ class Splash : AppCompatActivity() {
             finishAffinity()
         }
     }
+
 }
