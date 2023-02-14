@@ -45,6 +45,7 @@ class MainActivity : AppCompatActivity() {
         var versionApp: String? = null
         var isFirstRun: Boolean = true
         const val pkgGlobal = "com.tencent.ig"
+        const val pkgVng = "com.vng.pubgmobile"
         const val pkgKorea = "com.pubg.krmobile"
         var stringPath: String = "/files/UE4Game/ShadowTrackerExtra/ShadowTrackerExtra/Saved/"
         var configPath: String =
@@ -214,6 +215,15 @@ class MainActivity : AppCompatActivity() {
                     toast(this, "Korea tidak terinstall")
                 } else {
                     setupVersion("korea")
+                }
+            }
+            R.id.vng_version -> {
+                versionStr = "Vng"
+                if (!appInstalledOrNot(pkgVng)) {
+                    clearVersion(sav = false, config = false)
+                    toast(this, "Vng tidak terinstall")
+                } else {
+                    setupVersion("vng")
                 }
             }
             R.id.global_version -> {
@@ -404,6 +414,7 @@ class MainActivity : AppCompatActivity() {
     private fun setupVersion(pkg: String) {
         pkgApp = when (pkg) {
             "global" -> pkgGlobal
+            "vng" -> pkgVng
             "korea" -> pkgKorea
             else -> pkgGlobal
         }
@@ -635,7 +646,6 @@ class MainActivity : AppCompatActivity() {
             debug("file $f tidak ada")
             loadConfigs()
         }
-        //return if !File("$filesDir/$f").exists() else helper.copyToData(this, "UserCustom.ini", "${versionStr}.ini", Uri.parse(sharedpref.getString("${versionStr}", null)))
     }
 
     fun html(initz: String.() -> Unit): String {

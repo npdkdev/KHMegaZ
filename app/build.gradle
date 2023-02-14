@@ -9,10 +9,10 @@ android {
 
     defaultConfig {
         applicationId "id.khenji.khmega"
-        minSdk 26
+        minSdk 24
         targetSdk 33
-        versionCode 1300
-        versionName "1.3.0"
+        versionCode 1320
+        versionName "1.3.2"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
