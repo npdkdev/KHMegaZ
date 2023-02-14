@@ -980,7 +980,6 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-
     private fun readSDK30(treeUri: Uri) {
         val tree = DocumentFile.fromTreeUri(this, treeUri)!!
         val uriList = arrayListOf<Uri>()

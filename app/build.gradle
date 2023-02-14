@@ -11,8 +11,8 @@ android {
         applicationId "id.khenji.khmega"
         minSdk 24
         targetSdk 33
-        versionCode 1320
-        versionName "1.3.2"
+        versionCode 1420
+        versionName "1.4.2"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
