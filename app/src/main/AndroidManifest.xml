@@ -2,7 +2,7 @@
 <manifest xmlns:tools="http://schemas.android.com/tools"
     xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-sdk
-        android:minSdkVersion="26"
+        android:minSdkVersion="24"
         android:maxSdkVersion="33"/>
 
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"/>

@@ -139,8 +139,7 @@ class MainActivity : AppCompatActivity() {
             true
         }
 
-        binding.editconfig.addTextChangedListener {
-            //debug(it.toString())
+        binding.editconfig.addTextChangedListener { txt ->
         }
 
         binding.fabRun.setOnClickListener {
@@ -166,8 +165,13 @@ class MainActivity : AppCompatActivity() {
                 try {
                     val saveFile = File("${filesDir}/UserCustom.ini")
                     val backupFile = File("${filesDir}/backup$versionStr.ini")
-                    val content = binding.editconfig.text.split("\n").filter { it.isNotBlank() }
+                    val contentFile = binding.editconfig.text.replace("\\s+".toRegex(), "")
+                        .replace("+CVars=","\n+CVars=")
+                    binding.editconfig.setText(contentFile)
+                    val content = contentFile.split("\n").filter { it.isNotBlank() }
                         .joinToString("\n")
+//                    val content = contentFile.split("\n").filter { it.isNotBlank() }
+//                        .joinToString("\n")
                     if (content.isEmpty() || content.lines().size < 10) {
                         toast(this, "Format Config Salah -2")
                     } else if (content.contains("BackUp DeviceProfile") or content.contains("UserCustom DeviceProfile")) {
@@ -238,7 +242,7 @@ class MainActivity : AppCompatActivity() {
             else -> {}
         }
     }
-    private fun clearVersion(sav: Boolean = true, config: Boolean = true): Boolean {
+    private fun clearVersion(sav: Boolean = true, config: Boolean = false): Boolean {
         return try {
             binding.pubgVersion.setOnCheckedChangeListener(null)
             binding.pubgVersion.clearCheck()
@@ -907,6 +911,7 @@ class MainActivity : AppCompatActivity() {
             }
             return true
         } catch (e: Exception) {
+            toast(this,e.toString())
             debug("Error ${e.message}")
             return false
         }
